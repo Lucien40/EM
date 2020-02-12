@@ -1,13 +1,17 @@
+#include <RcppArmadillo.h>
+
 #include <armadillo>
 #include <iostream>
 #include <tuple>
 #include <vector>
 
+// [[Rcpp::depends(RcppArmadillo)]]
+using namespace Rcpp;
+
 std::tuple<double, double> getMaterial(double x, double y, double z, double R,
                                        double Ra) {
   return std::make_tuple(x, y);
 }
-
 double getPMLRx(size_t ix) { return 0; }
 double getPMLRy(size_t iy) { return 0; }
 double getPMLRz(size_t iz) { return 0; }
@@ -22,7 +26,8 @@ double getPMLCSx(size_t ix) { return 0; }
 double getPMLCSy(size_t iy) { return 0; }
 double getPMLCSz(size_t iz) { return 0; }
 
-int main(int argc, char const *argv[]) {
+// [[Rcpp::export]]
+List FTDT() {
   double xLen = 0.2;
   double yLen = 0.2;
   double zLen = 0.2;
@@ -183,29 +188,29 @@ int main(int argc, char const *argv[]) {
                 getPMLCSy(iy) * (Ez(it)(ix, iy, iz) - Ez(it)(ix, iy + 1, iz));
 
             Hxz(it)(ix, iy, iz) =
-                getPMLRSz(iz) * Hxz(it - 1)(ix, iy, iz) +
+                getPMLRSz(iz) * Hxz(it - 1)(ix, iy, iz) -
                 getPMLCSz(iz) * (Ey(it)(ix, iy, iz) - Ey(it)(ix, iy, iz + 1));
 
             Hzy(it)(ix, iy, iz) =
-                getPMLRSy(iy) * Hzy(it - 1)(ix, iy, iz) +
+                getPMLRSy(iy) * Hzy(it - 1)(ix, iy, iz) -
                 getPMLCSy(iy) * (Ex(it)(ix, iy, iz) - Ex(it)(ix, iy + 1, iz));
 
             Hzx(it)(ix, iy, iz) =
                 getPMLRSx(ix) * Hzx(it - 1)(ix, iy, iz) +
-                getPMLCSx(ix) * (Ey(it)(ix, iy, iz) - Ey(it)(ix, iy + 1, iz));
+                getPMLCSx(ix) * (Ey(it)(ix, iy, iz) - Ey(it)(ix + 1, iy, iz));
 
             Hyx(it)(ix, iy, iz) =
-                getPMLRSx(iy) * Hyx(it - 1)(ix, iy, iz) +
-                getPMLCSx(iy) * (Ez(it)(ix, iy, iz) - Ez(it)(ix, iy + 1, iz));
+                getPMLRSx(iy) * Hyx(it - 1)(ix, iy, iz) -
+                getPMLCSx(iy) * (Ez(it)(ix, iy, iz) - Ez(it)(ix + 1, iy, iz));
 
             Hyz(it)(ix, iy, iz) =
                 getPMLRSz(iy) * Hyz(it - 1)(ix, iy, iz) +
-                getPMLCSz(iy) * (Ex(it)(ix, iy, iz) - Ex(it)(ix, iy + 1, iz));
+                getPMLCSz(iy) * (Ex(it)(ix, iy, iz) - Ex(it)(ix, iy, iz + 1));
           }
         }
       }
     }
   }
-
-  return 0;
+  return List::create(Named("Ex") = Ex, Named("Ey") = Ey, Named("Ez") = Ez,
+                      Named("Hx") = Hx, Named("Hy") = Hy, Named("Hz") = Hz);
 }
