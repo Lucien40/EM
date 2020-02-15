@@ -188,8 +188,9 @@ void outE(arma::field<arma::dcube> const &Ex,
           arma::field<arma::dcube> const &Ey,
           arma::field<arma::dcube> const &Ez, double dt) {
   for (size_t i = 0; i < Ex.size(); i++) {
-    std::string dir(std::to_string(i));
-    std::filesystem::create_directory(dir.c_str());
+    std::string dir("Data/" + std::to_string(i));
+
+    std::filesystem::create_directories(dir.c_str());
     arma::cube Exi(Ex(i));
     std::ofstream fileObservables(
         ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E").c_str());
@@ -276,8 +277,9 @@ void outH(arma::field<arma::dcube> const &Hx,
           arma::field<arma::dcube> const &Hy,
           arma::field<arma::dcube> const &Hz, double dt) {
   for (size_t i = 0; i < Hx.size(); i++) {
-    std::string dir(std::to_string(i));
-    std::filesystem::create_directory(dir.c_str());
+    std::string dir("Data/" + std::to_string(i));
+
+    std::filesystem::create_directories(dir.c_str());
     arma::cube Hxi(Hx(i));
     std::ofstream fileObservables(
         ("/home/lucien/Documents/Em/EM/" + dir + "/" + "H").c_str());
@@ -287,7 +289,7 @@ void outH(arma::field<arma::dcube> const &Hx,
            "\n"
            R"(| =========                 |                                                 |)"
            "\n"
-           R"(| \\      /  F ield         | foam-extend: Open Source CFD                    |)"
+           R"(| \\      /  F ield         | foam-extend: Open Source Cstd::filesystem::create_directory();FD                    |)"
            "\n"
            R"(|  \\    /   O peration     | Version:     4.0                                |)"
            "\n"
