@@ -5,10 +5,15 @@
 #include <string>
 
 int main(int argc, char const *argv[]) {
-  std::string dir("tets");
-  std::filesystem::create_directory(dir.c_str());
-  std::ofstream fileObservables;
-  fileObservables.open("/home/lucien/Documents/Em/EM/tets/blas.out");
-  fileObservables << "ho";
+  // raw-string literal example with the literal
+  // made up of separate, concatenated literals
+  std::string s =
+      R"(abc)"
+      R"( followed by not a newline: \n)"
+      " which is then followed by a non-raw literal that's concatenated \n with"
+      " an embedded non-raw newline";
+
+  std::cout << s << std::endl;
+
   return 0;
 }

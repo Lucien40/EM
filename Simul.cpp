@@ -1,16 +1,12 @@
-#include <RcppArmadillo.h>
-#include <sys/stat.h>
 
 #include <armadillo>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
 #include <tuple>
 #include <vector>
-
-// [[Rcpp::depends(RcppArmadillo)]]
-using namespace Rcpp;
 
 namespace {
 
@@ -193,11 +189,50 @@ void outE(arma::field<arma::dcube> const &Ex,
           arma::field<arma::dcube> const &Ez, double dt) {
   for (size_t i = 0; i < Ex.size(); i++) {
     std::string dir(std::to_string(i));
-    mkdir(dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    std::filesystem::create_directory(dir.c_str());
     arma::cube Exi(Ex(i));
     std::ofstream fileObservables(
-        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E.out").c_str());
+        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E").c_str());
     fileObservables.precision(15);
+    fileObservables
+        << R"(/*--------------------------------*- C++ -*----------------------------------*\)"
+           "\n"
+           R"(| =========                 |                                                 |)"
+           "\n"
+           R"(| \\      /  F ield         | foam-extend: Open Source CFD                    |)"
+           "\n"
+           R"(|  \\    /   O peration     | Version:     4.0                                |)"
+           "\n"
+           R"(|   \\  /    A nd           | Web:         http://www.foam-extend.org         |)"
+           "\n"
+           R"(|    \\/     M anipulation  |                                                 |)"
+           "\n"
+           R"(\*---------------------------------------------------------------------------*/)"
+           "\n"
+           R"(FoamFile)"
+           "\n"
+           R"({)"
+           "\n"
+           R"(    version 2.0;)"
+           "\n"
+           R"(    format ascii;)"
+           "\n"
+           R"(    class volVectorField;)"
+           "\n"
+           R"(    location ")"
+        << dir
+        << R"(";)"
+           "\n"
+           R"(    object      E;)"
+           "\n}\n"
+           R"(// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //)"
+           "\n\n"
+           R"(dimensions      [0 1 -1 0 0 0 0];)"
+           "\n\n"
+           R"(internalField   nonuniform List<vector>)"
+           "\n"
+        << Exi.n_elem << "\n(\n";
+
     for (size_t ix = 0; ix < Exi.n_rows; ix++) {
       for (size_t iy = 0; iy < Exi.n_cols; iy++) {
         for (size_t iz = 0; iz < Exi.n_slices; iz++) {
@@ -207,12 +242,125 @@ void outE(arma::field<arma::dcube> const &Ex,
         }
       }
     }
+    fileObservables
+        << ")\n;\n\n"
+           "boundaryField\n"
+           "{\n"
+           "    fuel\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (0.1 0 0);\n"
+           "    }\n"
+           "    air\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (-0.1 0 0);\n"
+           "    }\n"
+           "    outlet\n"
+           "    {\n"
+           "        type            zeroGradient;\n"
+           "    }\n"
+           "    frontAndBack\n"
+           "    {\n"
+           "        type            empty;\n"
+           "    }\n"
+           "}\n\n\n"
+           R"(// ************************************************************************* //)"
+           "\n ";
+
     fileObservables.close();
   }
 }
 
-// [[Rcpp::export]]
-List FTDT() {
+void outH(arma::field<arma::dcube> const &Hx,
+          arma::field<arma::dcube> const &Hy,
+          arma::field<arma::dcube> const &Hz, double dt) {
+  for (size_t i = 0; i < Hx.size(); i++) {
+    std::string dir(std::to_string(i));
+    std::filesystem::create_directory(dir.c_str());
+    arma::cube Hxi(Hx(i));
+    std::ofstream fileObservables(
+        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "H").c_str());
+    fileObservables.precision(15);
+    fileObservables
+        << R"(/*--------------------------------*- C++ -*----------------------------------*\)"
+           "\n"
+           R"(| =========                 |                                                 |)"
+           "\n"
+           R"(| \\      /  F ield         | foam-extend: Open Source CFD                    |)"
+           "\n"
+           R"(|  \\    /   O peration     | Version:     4.0                                |)"
+           "\n"
+           R"(|   \\  /    A nd           | Web:         http://www.foam-extend.org         |)"
+           "\n"
+           R"(|    \\/     M anipulation  |                                                 |)"
+           "\n"
+           R"(\*---------------------------------------------------------------------------*/)"
+           "\n"
+           R"(FoamFile)"
+           "\n"
+           R"({)"
+           "\n"
+           R"(    version 2.0;)"
+           "\n"
+           R"(    format ascii;)"
+           "\n"
+           R"(    class volVectorField;)"
+           "\n"
+           R"(    location ")"
+        << dir
+        << R"(";)"
+           "\n"
+           R"(    object      H;)"
+           "\n}\n"
+           R"(// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //)"
+           "\n\n"
+           R"(dimensions      [0 1 -1 0 0 0 0];)"
+           "\n\n"
+           R"(internalField   nonuniform List<vector>)"
+           "\n"
+        << Hxi.n_elem << "\n(\n";
+
+    for (size_t ix = 0; ix < Hxi.n_rows; ix++) {
+      for (size_t iy = 0; iy < Hxi.n_cols; iy++) {
+        for (size_t iz = 0; iz < Hxi.n_slices; iz++) {
+          fileObservables << "(" << Hx(i)(ix, iy, iz) << ","
+                          << Hy(i)(ix, iy, iz) << "," << Hz(i)(ix, iy, iz)
+                          << ")" << std::endl;
+        }
+      }
+    }
+    fileObservables
+        << ")\n;\n\n"
+           "boundaryField\n"
+           "{\n"
+           "    fuel\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (0.1 0 0);\n"
+           "    }\n"
+           "    air\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (-0.1 0 0);\n"
+           "    }\n"
+           "    outlet\n"
+           "    {\n"
+           "        type            zeroGradient;\n"
+           "    }\n"
+           "    frontAndBack\n"
+           "    {\n"
+           "        type            empty;\n"
+           "    }\n"
+           "}\n\n\n"
+           R"(// ************************************************************************* //)"
+           "\n ";
+
+    fileObservables.close();
+  }
+}
+
+int main(int argc, char const *argv[]) {
   double xLen = 0.5;
   double yLen = 0.5;
   double zLen = 0.5;
@@ -482,6 +630,6 @@ List FTDT() {
     }
   }
   outE(Ex, Ey, Ez, dt);
-  return List::create(Named("Ex") = Ex, Named("Ey") = Ey, Named("Ez") = Ez,
-                      Named("Hx") = Hx, Named("Hy") = Hy, Named("Hz") = Hz);
+  outH(Hx, Hy, Hz, dt);
+  return 0;
 }
