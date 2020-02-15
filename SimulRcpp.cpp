@@ -1,5 +1,4 @@
 #include <RcppArmadillo.h>
-#include <sys/stat.h>
 
 #include <armadillo>
 #include <fstream>
@@ -186,29 +185,6 @@ arma::vec getPMLCS(
     }
   }
   return C;
-}
-
-void outE(arma::field<arma::dcube> const &Ex,
-          arma::field<arma::dcube> const &Ey,
-          arma::field<arma::dcube> const &Ez, double dt) {
-  for (size_t i = 0; i < Ex.size(); i++) {
-    std::string dir(std::to_string(i));
-    mkdir(dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    arma::cube Exi(Ex(i));
-    std::ofstream fileObservables(
-        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E.out").c_str());
-    fileObservables.precision(15);
-    for (size_t ix = 0; ix < Exi.n_rows; ix++) {
-      for (size_t iy = 0; iy < Exi.n_cols; iy++) {
-        for (size_t iz = 0; iz < Exi.n_slices; iz++) {
-          fileObservables << "(" << Ex(i)(ix, iy, iz) << ","
-                          << Ey(i)(ix, iy, iz) << "," << Ez(i)(ix, iy, iz)
-                          << ")" << std::endl;
-        }
-      }
-    }
-    fileObservables.close();
-  }
 }
 
 // [[Rcpp::export]]
@@ -481,7 +457,6 @@ List FTDT() {
       }
     }
   }
-  outE(Ex, Ey, Ez, dt);
   return List::create(Named("Ex") = Ex, Named("Ey") = Ey, Named("Ez") = Ez,
                       Named("Hx") = Hx, Named("Hy") = Hy, Named("Hz") = Hz);
 }
