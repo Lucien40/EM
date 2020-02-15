@@ -10,7 +10,7 @@ FoamFile
     version 2.0;
     format ascii;
     class volVectorField;
-    location "474";
+    location "Data/474";
     object      E;
 }
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
