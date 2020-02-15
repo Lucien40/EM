@@ -6,9 +6,10 @@ output: html_notebook
 
 
 ```{r}
+library(Rcpp)
 library(RcppArmadillo)
 sourceCpp('Simul.cpp')
-
+x = FTDT()
 
 ```
 

@@ -1,8 +1,11 @@
 #include <RcppArmadillo.h>
+#include <sys/stat.h>
 
 #include <armadillo>
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <string>
 #include <tuple>
 #include <vector>
 
@@ -185,14 +188,37 @@ arma::vec getPMLCS(
   return C;
 }
 
+void outE(arma::field<arma::dcube> const &Ex,
+          arma::field<arma::dcube> const &Ey,
+          arma::field<arma::dcube> const &Ez, double dt) {
+  for (size_t i = 0; i < Ex.size(); i++) {
+    std::string dir(std::to_string(i));
+    mkdir(dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    arma::cube Exi(Ex(i));
+    std::ofstream fileObservables(
+        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E.out").c_str());
+    fileObservables.precision(15);
+    for (size_t ix = 0; ix < Exi.n_rows; ix++) {
+      for (size_t iy = 0; iy < Exi.n_cols; iy++) {
+        for (size_t iz = 0; iz < Exi.n_slices; iz++) {
+          fileObservables << "(" << Ex(i)(ix, iy, iz) << ","
+                          << Ey(i)(ix, iy, iz) << "," << Ez(i)(ix, iy, iz)
+                          << ")" << std::endl;
+        }
+      }
+    }
+    fileObservables.close();
+  }
+}
+
 // [[Rcpp::export]]
 List FTDT() {
   double xLen = 0.5;
   double yLen = 0.5;
   double zLen = 0.5;
-  size_t NxInside = 8;
-  size_t NyInside = 8;
-  size_t NzInside = 8;
+  size_t NxInside = 10;
+  size_t NyInside = 10;
+  size_t NzInside = 10;
   size_t PML_depth = 3;
 
   size_t xN = NxInside + 2 * PML_depth;
@@ -208,8 +234,10 @@ List FTDT() {
   double t = 0;
   double stab_factor = 1;
   double dt = dx / (c * sqrt(3) * stab_factor);
-  size_t num_timesteps = totalN * 3;
+  size_t num_timesteps = totalN;
   double t_final = dt * num_timesteps;
+
+  // std::cout << t_final;
 
   arma::field<arma::dcube> Ex(num_timesteps);
   arma::field<arma::dcube> Ey(num_timesteps);
@@ -292,13 +320,15 @@ List FTDT() {
   }
 
   // DEFINE incident wave :
-  double inc_frequency = 900e9;
+  double inc_frequency = 1e7;
   double inc_omega = 2 * pi * inc_frequency;
   double inc_amplitude = 1e5;
   // units are teslas
   double inc_harmonic = 1;
 
   for (size_t it = 1; it < num_timesteps; it++) {
+    // std::cout << inc_amplitude * sin(inc_omega * inc_harmonic * it * dt)
+    // << std::endl;
     Hx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
     Hy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
     Hz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
@@ -351,6 +381,10 @@ List FTDT() {
               Ex(it)(ix, iy, iz) +=
                   inc_amplitude * sin(inc_omega * inc_harmonic * it * dt);
             }
+            // std::cout << inc_amplitude * sin(inc_omega * inc_harmonic * it *
+            // dt)
+            //<< std::endl;
+            // std::cout << it * dt << std::endl;
 
             Ey(it)(ix, iy, iz) =
                 (Ca(ix, iy, iz) * Rb * Ey(it - 1)(ix, iy, iz) +
@@ -376,7 +410,7 @@ List FTDT() {
                 PMLCSy(iy) *
                     (Exy(it - 1)(ix, iy, iz) + Exz(it - 1)(ix, iy, iz) -
                      Exy(it - 1)(ix, iy - 1, iz) - Exz(it - 1)(ix, iy - 1, iz));
-
+            inc_amplitude *sin(inc_omega * inc_harmonic * it * dt);
             Hzx(it)(ix, iy, iz) =
                 (PMLRSx(ix)) * Hzx(it - 1)(ix, iy, iz) +
                 PMLCSx(ix) *
@@ -435,18 +469,19 @@ List FTDT() {
                 PMLCz(iz) *
                     (Hyz(it - 1)(ix, iy, iz) + Hyx(it - 1)(ix, iy, iz) -
                      Hyz(it - 1)(ix, iy - 1, iz) - Hyx(it - 1)(ix, iy - 1, iz));
-          }
 
-          Ex(it)(ix, iy, iz) = Exy(it)(ix, iy, iz) + Exz(it)(ix, iy, iz);
-          Ey(it)(ix, iy, iz) = Eyx(it)(ix, iy, iz) + Eyz(it)(ix, iy, iz);
-          Ez(it)(ix, iy, iz) = Ezy(it)(ix, iy, iz) + Ezx(it)(ix, iy, iz);
-          Hx(it)(ix, iy, iz) = Hxy(it)(ix, iy, iz) + Hxz(it)(ix, iy, iz);
-          Hy(it)(ix, iy, iz) = Hyx(it)(ix, iy, iz) + Hyz(it)(ix, iy, iz);
-          Hz(it)(ix, iy, iz) = Hzy(it)(ix, iy, iz) + Hzx(it)(ix, iy, iz);
+            Ex(it)(ix, iy, iz) = Exy(it)(ix, iy, iz) + Exz(it)(ix, iy, iz);
+            Ey(it)(ix, iy, iz) = Eyx(it)(ix, iy, iz) + Eyz(it)(ix, iy, iz);
+            Ez(it)(ix, iy, iz) = Ezy(it)(ix, iy, iz) + Ezx(it)(ix, iy, iz);
+            Hx(it)(ix, iy, iz) = Hxy(it)(ix, iy, iz) + Hxz(it)(ix, iy, iz);
+            Hy(it)(ix, iy, iz) = Hyx(it)(ix, iy, iz) + Hyz(it)(ix, iy, iz);
+            Hz(it)(ix, iy, iz) = Hzy(it)(ix, iy, iz) + Hzx(it)(ix, iy, iz);
+          }
         }
       }
     }
   }
+  outE(Ex, Ey, Ez, dt);
   return List::create(Named("Ex") = Ex, Named("Ey") = Ey, Named("Ez") = Ez,
                       Named("Hx") = Hx, Named("Hy") = Hy, Named("Hz") = Hz);
 }
