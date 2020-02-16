@@ -8,8 +8,27 @@ output: html_notebook
 ```{r}
 library(Rcpp)
 library(RcppArmadillo)
-sourceCpp('Simul.cpp')
-x = FTDT()
+sourceCpp('RcppTest.cpp')
 
 ```
 
+```{r}
+x = FTDT(50,50,50)
+
+```
+  
+```{r}
+library(misc3d)
+v <-x[[1]][400][[1]]
+contour3d(v, 1,alpha = 0.1)
+```
+  
+```{r}
+x <- seq(-2,2,len=50)
+g <- expand.grid(x = x, y = x, z = x)
+v <- array(g$x^4 + g$y^4 + g$z^4, rep(length(x),3))
+con <- computeContour3d(v, max(v), 1)
+drawScene(makeTriangles(con))
+```
+  
+  

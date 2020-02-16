@@ -188,13 +188,13 @@ arma::vec getPMLCS(
 }
 
 // [[Rcpp::export]]
-List FTDT() {
+List FTDT(size_t NxIn, size_t NyIn, size_t NzIn) {
   double xLen = 0.5;
   double yLen = 0.5;
   double zLen = 0.5;
-  size_t NxInside = 10;
-  size_t NyInside = 10;
-  size_t NzInside = 10;
+  size_t NxInside = NxIn;
+  size_t NyInside = NxIn;
+  size_t NzInside = NxIn;
   size_t PML_depth = 3;
 
   size_t xN = NxInside + 2 * PML_depth;
@@ -210,7 +210,7 @@ List FTDT() {
   double t = 0;
   double stab_factor = 1;
   double dt = dx / (c * sqrt(3) * stab_factor);
-  size_t num_timesteps = totalN;
+  size_t num_timesteps = 500;
   double t_final = dt * num_timesteps;
 
   // std::cout << t_final;
@@ -222,19 +222,19 @@ List FTDT() {
   arma::field<arma::dcube> Hy(num_timesteps);
   arma::field<arma::dcube> Hz(num_timesteps);
 
-  arma::field<arma::dcube> Hxy(num_timesteps);
-  arma::field<arma::dcube> Hyx(num_timesteps);
-  arma::field<arma::dcube> Hzy(num_timesteps);
-  arma::field<arma::dcube> Hxz(num_timesteps);
-  arma::field<arma::dcube> Hyz(num_timesteps);
-  arma::field<arma::dcube> Hzx(num_timesteps);
+  arma::field<arma::dcube> Hxy(2);
+  arma::field<arma::dcube> Hyx(2);
+  arma::field<arma::dcube> Hzy(2);
+  arma::field<arma::dcube> Hxz(2);
+  arma::field<arma::dcube> Hyz(2);
+  arma::field<arma::dcube> Hzx(2);
 
-  arma::field<arma::dcube> Exy(num_timesteps);
-  arma::field<arma::dcube> Eyx(num_timesteps);
-  arma::field<arma::dcube> Ezy(num_timesteps);
-  arma::field<arma::dcube> Exz(num_timesteps);
-  arma::field<arma::dcube> Eyz(num_timesteps);
-  arma::field<arma::dcube> Ezx(num_timesteps);
+  arma::field<arma::dcube> Exy(2);
+  arma::field<arma::dcube> Eyx(2);
+  arma::field<arma::dcube> Ezy(2);
+  arma::field<arma::dcube> Exz(2);
+  arma::field<arma::dcube> Eyz(2);
+  arma::field<arma::dcube> Ezx(2);
 
   Ex(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
   Ey(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
@@ -296,9 +296,9 @@ List FTDT() {
   }
 
   // DEFINE incident wave :
-  double inc_frequency = 1e7;
+  double inc_frequency = c / (10 * dt);
   double inc_omega = 2 * pi * inc_frequency;
-  double inc_amplitude = 1e5;
+  double inc_amplitude = 1e3;
   // units are teslas
   double inc_harmonic = 1;
 
@@ -312,19 +312,19 @@ List FTDT() {
     Ey(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
     Ez(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
 
-    Hxy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Hyx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Hzy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Hxz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Hyz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Hzx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hxy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hyx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hzy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hxz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hyz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hzx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
 
-    Exy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Eyx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Ezy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Exz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Eyz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
-    Ezx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Exy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Eyx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ezy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Exz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Eyz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ezx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
 
     for (size_t ix = 1; ix < xN - 1; ix++) {
       for (size_t iy = 1; iy < yN - 1; iy++) {
@@ -333,25 +333,24 @@ List FTDT() {
               inFTDT(zN, PML_depth, iz)) {
             Hx(it)(ix, iy, iz) =
                 Hx(it - 1)(ix, iy, iz) +
-                (Rb * Ey(it - 1)(ix, iy, iz + 1) - Rb * Ey(it - 1)(ix, iy, iz) +
-                 Rb * Ez(it - 1)(ix, iy, iz) - Rb * Ez(it - 1)(ix, iy + 1, iz));
+                Ra * (Ey(it - 1)(ix, iy, iz + 1) - Ey(it - 1)(ix, iy, iz) +
+                      Ez(it - 1)(ix, iy, iz) - Ez(it - 1)(ix, iy + 1, iz));
 
             Hy(it)(ix, iy, iz) =
                 Hy(it - 1)(ix, iy, iz) +
-                (Rb * Ex(it - 1)(ix, iy, iz) - Rb * Ex(it - 1)(ix, iy, iz + 1) +
-                 Rb * Ez(it - 1)(ix + 1, iy, iz) - Rb * Ez(it - 1)(ix, iy, iz));
+                Ra * (Ex(it - 1)(ix, iy, iz) - Ex(it - 1)(ix, iy, iz + 1) +
+                      Ez(it - 1)(ix + 1, iy, iz) - Ez(it - 1)(ix, iy, iz));
 
             Hz(it)(ix, iy, iz) =
                 Hz(it - 1)(ix, iy, iz) +
-                (Rb * Ey(it - 1)(ix, iy, iz) - Rb * Ey(it - 1)(ix + 1, iy, iz) +
-                 Rb * Ex(it - 1)(ix, iy + 1, iz) - Rb * Ex(it - 1)(ix, iy, iz));
+                Ra * (Ey(it - 1)(ix, iy, iz) - Ey(it - 1)(ix + 1, iy, iz) +
+                      Ex(it - 1)(ix, iy + 1, iz) - Ex(it - 1)(ix, iy, iz));
 
             Ex(it)(ix, iy, iz) =
                 (Ca(ix, iy, iz) * Rb * Ex(it - 1)(ix, iy, iz) +
-                 Cb(ix, iy, iz) *
+                 Cb(ix, iy, iz) * invRb *
                      (Hz(it)(ix, iy, iz) - Hz(it)(ix, iy - 1, iz) -
-                      Hy(it)(ix, iy, iz) + Hy(it)(ix, iy, iz - 1))) *
-                invRb;
+                      Hy(it)(ix, iy, iz) + Hy(it)(ix, iy, iz - 1)));
 
             if (ix == PML_depth + 1) {
               Ex(it)(ix, iy, iz) +=
@@ -364,99 +363,99 @@ List FTDT() {
 
             Ey(it)(ix, iy, iz) =
                 (Ca(ix, iy, iz) * Rb * Ey(it - 1)(ix, iy, iz) +
-                 Cb(ix, iy, iz) *
+                 Cb(ix, iy, iz) * invRb *
                      (Hx(it)(ix, iy, iz) - Hx(it)(ix, iy, iz - 1) -
-                      Hz(it)(ix, iy, iz) + Hz(it)(ix - 1, iy, iz))) *
-                invRb;
+                      Hz(it)(ix, iy, iz) + Hz(it)(ix - 1, iy, iz)));
             Ez(it)(ix, iy, iz) =
                 (Ca(ix, iy, iz) * Rb * Ez(it - 1)(ix, iy, iz) +
-                 Cb(ix, iy, iz) *
+                 Cb(ix, iy, iz) * invRb *
                      (Hy(it)(ix, iy, iz) - Hy(it)(ix - 1, iy, iz) -
-                      Hx(it)(ix, iy, iz) + Hx(it)(ix, iy - 1, iz))) *
-                invRb;
+                      Hx(it)(ix, iy, iz) + Hx(it)(ix, iy - 1, iz)));
           } else {
-            Hxy(it)(ix, iy, iz) =
-                (PMLRSy(iy)) * Hxy(it - 1)(ix, iy, iz) +
-                PMLCSy(iy) *
-                    (Ezx(it - 1)(ix, iy, iz) + Ezy(it - 1)(ix, iy, iz) -
-                     Ezx(it - 1)(ix, iy - 1, iz) - Ezy(it - 1)(ix, iy - 1, iz));
+            Hxy(1)(ix, iy, iz) =
+                (PMLRSy(iy)) * Hxy(0)(ix, iy, iz) +
+                PMLCSy(iy) * (Ezx(0)(ix, iy, iz) + Ezy(0)(ix, iy, iz) -
+                              Ezx(0)(ix, iy - 1, iz) - Ezy(0)(ix, iy - 1, iz));
 
-            Hzy(it)(ix, iy, iz) =
-                (PMLRSy(iy)) * Hzy(it - 1)(ix, iy, iz) -
-                PMLCSy(iy) *
-                    (Exy(it - 1)(ix, iy, iz) + Exz(it - 1)(ix, iy, iz) -
-                     Exy(it - 1)(ix, iy - 1, iz) - Exz(it - 1)(ix, iy - 1, iz));
+            Hzy(1)(ix, iy, iz) =
+                (PMLRSy(iy)) * Hzy(0)(ix, iy, iz) -
+                PMLCSy(iy) * (Exy(0)(ix, iy, iz) + Exz(0)(ix, iy, iz) -
+                              Exy(0)(ix, iy - 1, iz) - Exz(0)(ix, iy - 1, iz));
             inc_amplitude *sin(inc_omega * inc_harmonic * it * dt);
-            Hzx(it)(ix, iy, iz) =
-                (PMLRSx(ix)) * Hzx(it - 1)(ix, iy, iz) +
-                PMLCSx(ix) *
-                    (Eyx(it - 1)(ix, iy, iz) + Eyz(it - 1)(ix, iy, iz) -
-                     Eyx(it - 1)(ix, iy - 1, iz) - Eyz(it - 1)(ix, iy - 1, iz));
+            Hzx(1)(ix, iy, iz) =
+                (PMLRSx(ix)) * Hzx(0)(ix, iy, iz) +
+                PMLCSx(ix) * (Eyx(0)(ix, iy, iz) + Eyz(0)(ix, iy, iz) -
+                              Eyx(0)(ix, iy - 1, iz) - Eyz(0)(ix, iy - 1, iz));
 
-            Hyx(it)(ix, iy, iz) =
-                (PMLRSx(ix)) * Hyx(it - 1)(ix, iy, iz) -
-                PMLCSx(ix) *
-                    (Ezx(it - 1)(ix, iy, iz) + Ezy(it - 1)(ix, iy, iz) -
-                     Ezx(it - 1)(ix, iy - 1, iz) - Ezy(it - 1)(ix, iy - 1, iz));
+            Hyx(1)(ix, iy, iz) =
+                (PMLRSx(ix)) * Hyx(0)(ix, iy, iz) -
+                PMLCSx(ix) * (Ezx(0)(ix, iy, iz) + Ezy(0)(ix, iy, iz) -
+                              Ezx(0)(ix, iy - 1, iz) - Ezy(0)(ix, iy - 1, iz));
 
-            Hyz(it)(ix, iy, iz) =
-                (PMLRSz(iz)) * Hyz(it - 1)(ix, iy, iz) +
-                PMLCSz(iz) *
-                    (Exz(it - 1)(ix, iy, iz) + Exy(it - 1)(ix, iy, iz) -
-                     Exz(it - 1)(ix, iy - 1, iz) - Exy(it - 1)(ix, iy - 1, iz));
+            Hyz(1)(ix, iy, iz) =
+                (PMLRSz(iz)) * Hyz(0)(ix, iy, iz) +
+                PMLCSz(iz) * (Exz(0)(ix, iy, iz) + Exy(0)(ix, iy, iz) -
+                              Exz(0)(ix, iy - 1, iz) - Exy(0)(ix, iy - 1, iz));
 
-            Hxz(it)(ix, iy, iz) =
-                (PMLRSz(iz)) * Hxz(it - 1)(ix, iy, iz) -
-                PMLCSz(iz) *
-                    (Eyz(it - 1)(ix, iy, iz) + Eyx(it - 1)(ix, iy, iz) -
-                     Eyz(it - 1)(ix, iy - 1, iz) - Eyx(it - 1)(ix, iy - 1, iz));
-            Exy(it)(ix, iy, iz) =
-                (PMLRy(iy)) * Exy(it - 1)(ix, iy, iz) +
-                PMLCy(iy) *
-                    (Hzx(it - 1)(ix, iy, iz) + Hzy(it - 1)(ix, iy, iz) -
-                     Hzx(it - 1)(ix, iy - 1, iz) - Hzy(it - 1)(ix, iy - 1, iz));
+            Hxz(1)(ix, iy, iz) =
+                (PMLRSz(iz)) * Hxz(0)(ix, iy, iz) -
+                PMLCSz(iz) * (Eyz(0)(ix, iy, iz) + Eyx(0)(ix, iy, iz) -
+                              Eyz(0)(ix, iy - 1, iz) - Eyx(0)(ix, iy - 1, iz));
+            Exy(1)(ix, iy, iz) =
+                (PMLRy(iy)) * Exy(0)(ix, iy, iz) +
+                PMLCy(iy) * (Hzx(0)(ix, iy, iz) + Hzy(0)(ix, iy, iz) -
+                             Hzx(0)(ix, iy - 1, iz) - Hzy(0)(ix, iy - 1, iz));
 
-            Ezy(it)(ix, iy, iz) =
-                (PMLRy(iy)) * Ezy(it - 1)(ix, iy, iz) -
-                PMLCy(iy) *
-                    (Hxy(it - 1)(ix, iy, iz) + Hxz(it - 1)(ix, iy, iz) -
-                     Hxy(it - 1)(ix, iy - 1, iz) - Hxz(it - 1)(ix, iy - 1, iz));
+            Ezy(1)(ix, iy, iz) =
+                (PMLRy(iy)) * Ezy(0)(ix, iy, iz) -
+                PMLCy(iy) * (Hxy(0)(ix, iy, iz) + Hxz(0)(ix, iy, iz) -
+                             Hxy(0)(ix, iy - 1, iz) - Hxz(0)(ix, iy - 1, iz));
 
-            Ezx(it)(ix, iy, iz) =
-                (PMLRx(ix)) * Ezx(it - 1)(ix, iy, iz) +
-                PMLCx(ix) *
-                    (Hyx(it - 1)(ix, iy, iz) + Hyz(it - 1)(ix, iy, iz) -
-                     Hyx(it - 1)(ix, iy - 1, iz) - Hyz(it - 1)(ix, iy - 1, iz));
+            Ezx(1)(ix, iy, iz) =
+                (PMLRx(ix)) * Ezx(0)(ix, iy, iz) +
+                PMLCx(ix) * (Hyx(0)(ix, iy, iz) + Hyz(0)(ix, iy, iz) -
+                             Hyx(0)(ix, iy - 1, iz) - Hyz(0)(ix, iy - 1, iz));
 
-            Eyx(it)(ix, iy, iz) =
-                (PMLRx(ix)) * Eyx(it - 1)(ix, iy, iz) -
-                PMLCx(ix) *
-                    (Hzx(it - 1)(ix, iy, iz) + Hzy(it - 1)(ix, iy, iz) -
-                     Hzx(it - 1)(ix, iy - 1, iz) - Hzy(it - 1)(ix, iy - 1, iz));
+            Eyx(1)(ix, iy, iz) =
+                (PMLRx(ix)) * Eyx(0)(ix, iy, iz) -
+                PMLCx(ix) * (Hzx(0)(ix, iy, iz) + Hzy(0)(ix, iy, iz) -
+                             Hzx(0)(ix, iy - 1, iz) - Hzy(0)(ix, iy - 1, iz));
 
-            Eyz(it)(ix, iy, iz) =
-                (PMLRz(iz)) * Eyz(it - 1)(ix, iy, iz) +
-                PMLCz(iz) *
-                    (Hxz(it - 1)(ix, iy, iz) + Hxy(it - 1)(ix, iy, iz) -
-                     Hxz(it - 1)(ix, iy - 1, iz) - Hxy(it - 1)(ix, iy - 1, iz));
+            Eyz(1)(ix, iy, iz) =
+                (PMLRz(iz)) * Eyz(0)(ix, iy, iz) +
+                PMLCz(iz) * (Hxz(0)(ix, iy, iz) + Hxy(0)(ix, iy, iz) -
+                             Hxz(0)(ix, iy - 1, iz) - Hxy(0)(ix, iy - 1, iz));
 
-            Exz(it)(ix, iy, iz) =
-                (PMLRz(iz)) * Exz(it - 1)(ix, iy, iz) -
-                PMLCz(iz) *
-                    (Hyz(it - 1)(ix, iy, iz) + Hyx(it - 1)(ix, iy, iz) -
-                     Hyz(it - 1)(ix, iy - 1, iz) - Hyx(it - 1)(ix, iy - 1, iz));
+            Exz(1)(ix, iy, iz) =
+                (PMLRz(iz)) * Exz(0)(ix, iy, iz) -
+                PMLCz(iz) * (Hyz(0)(ix, iy, iz) + Hyx(0)(ix, iy, iz) -
+                             Hyz(0)(ix, iy - 1, iz) - Hyx(0)(ix, iy - 1, iz));
 
-            Ex(it)(ix, iy, iz) = Exy(it)(ix, iy, iz) + Exz(it)(ix, iy, iz);
-            Ey(it)(ix, iy, iz) = Eyx(it)(ix, iy, iz) + Eyz(it)(ix, iy, iz);
-            Ez(it)(ix, iy, iz) = Ezy(it)(ix, iy, iz) + Ezx(it)(ix, iy, iz);
-            Hx(it)(ix, iy, iz) = Hxy(it)(ix, iy, iz) + Hxz(it)(ix, iy, iz);
-            Hy(it)(ix, iy, iz) = Hyx(it)(ix, iy, iz) + Hyz(it)(ix, iy, iz);
-            Hz(it)(ix, iy, iz) = Hzy(it)(ix, iy, iz) + Hzx(it)(ix, iy, iz);
+            Ex(it)(ix, iy, iz) = Exy(1)(ix, iy, iz) + Exz(1)(ix, iy, iz);
+            Ey(it)(ix, iy, iz) = Eyx(1)(ix, iy, iz) + Eyz(1)(ix, iy, iz);
+            Ez(it)(ix, iy, iz) = Ezy(1)(ix, iy, iz) + Ezx(1)(ix, iy, iz);
+            Hx(it)(ix, iy, iz) = Hxy(1)(ix, iy, iz) + Hxz(1)(ix, iy, iz);
+            Hy(it)(ix, iy, iz) = Hyx(1)(ix, iy, iz) + Hyz(1)(ix, iy, iz);
+            Hz(it)(ix, iy, iz) = Hzy(1)(ix, iy, iz) + Hzx(1)(ix, iy, iz);
           }
         }
       }
     }
+    Hxy(0) = Hxy(1);
+    Hyx(0) = Hyx(1);
+    Hzy(0) = Hzy(1);
+    Hxz(0) = Hxz(1);
+    Hyz(0) = Hyz(1);
+    Hzx(0) = Hzx(1);
+
+    Exy(0) = Exy(1);
+    Eyx(0) = Eyx(1);
+    Ezy(0) = Ezy(1);
+    Exz(0) = Exz(1);
+    Eyz(0) = Eyz(1);
+    Ezx(0) = Ezx(1);
   }
-  return List::create(Named("Ex") = Ex, Named("Ey") = Ey, Named("Ez") = Ez,
-                      Named("Hx") = Hx, Named("Hy") = Hy, Named("Hz") = Hz);
+  return List::create(Named("Ex") = wrap(Ex), Named("Ey") = wrap(Ey),
+                      Named("Ez") = wrap(Ez), Named("Hx") = Hx,
+                      Named("Hy") = Hy, Named("Hz") = Hz);
 }

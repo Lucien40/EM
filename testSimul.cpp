@@ -1,0 +1,677 @@
+
+
+#include <armadillo>
+#include <filesystem>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <string>
+#include <tuple>
+#include <vector>
+
+namespace {
+
+// Physical constants
+double eps0 = 8.854e-12;
+double c = 299792458;
+double pi = 3.14159265359;
+double mu0 = 1.0 / (eps0 * pow(c, 2));
+}  // namespace
+
+std::tuple<double, double, double> getMaterialProps(int matCode) {
+  // Takes as input a material code
+  // and returns mu, eps, sigma for that material locally
+
+  double sigma(1);
+  double eps_r(1);
+  double eps(0);
+  double mu(1);
+  switch (matCode) {
+    case 0:  // vacuum
+      sigma = 0;
+      eps_r = eps0;
+      break;
+
+    case 1:  // CARBON FIBRE; neglect polarisation
+
+      // https://lib.dr.iastate.edu/cgi/viewcontent.cgi?article=2710&context=qnde
+      sigma = 106;
+      eps_r = sqrt(26.6 * 26.6 + 17.2 * 17.2);
+      break;
+
+    case 2:  // GLASS FIBRE
+             // https://ieeexplore.ieee.org/document/7179196
+      sigma = 1e-15;
+      // for E glass;
+      // https://lib.dr.iastate.edu/cgi/viewcontent.cgi?article=2710&context=qnde
+      eps_r = sqrt(4.71 * 4.71 + 0.99 * 0.99);
+      break;
+
+    case 3:  // ALUMINUM
+      sigma =
+          3.8e7;  // https://sciencing.com/aluminum-vs-steel-conductivity-5997828.html
+      eps = 82.3e-12;
+      eps_r = eps / eps0;
+      break;
+
+    default:
+      break;
+  }
+
+  return std::make_tuple(eps_r, sigma, mu);
+}
+
+int getMat(double x, double y, double z) {
+  // Sets material geometry
+  double R_rocket_outer = 5 * 0.0254 * 0.5;
+  // inches to metres
+  double R_rocket_inner = 4.9 * 0.0254 * 0.5;
+
+  double GFRP_start_height = -0.3;
+  double GFRP_end_height = 0.3;
+
+  double Aluminum_start_height = 0;
+  double Aluminum_end_height = .1;
+  int matCode(0);
+
+  double s = sqrt(x * x + y * y);
+  if (R_rocket_inner < s && s < R_rocket_outer) {
+    if (GFRP_start_height < z && z < GFRP_end_height) {
+      matCode = 2;  // GFRP
+    } else {
+      matCode = 1;  // Carbon
+    }
+  } else if (s < R_rocket_inner && Aluminum_start_height < z &&
+             z < Aluminum_end_height) {
+    matCode = 3;  // ALUMINUM
+  } else {
+    matCode =
+        0;  // VACUUM (also gets registered for PML region, but doesn't matter)
+  }
+  return matCode;
+}
+
+std::tuple<double, double, double> getCondMaterial(double x, double y,
+                                                   double z) {
+  // get electromagnetic properties based on position
+  return getMaterialProps(getMat(x, y, z));
+}
+
+bool inFTDT(size_t N, size_t Depth, size_t i) {
+  // True if in FDTD region in 1D
+  return (i >= Depth) && (i < N - Depth);
+}
+
+// PML layer coefficients, quadratically graded
+
+std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
+  double init(1);
+  double final(100);
+  double a(depth * d - final / d / depth);
+  double sig(x * d * (x * d - a) + init);
+  double sigt((x + 0.5) * d * ((x + 0.5) * d - a) + init);
+  double sigs(sigt * mu0 / eps0);
+  return std::make_tuple(sig, sigs);
+};
+std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
+  double init(1);
+  double final(100);
+  double a(depth * d - final / d / depth);
+  double sig(y * d * (y * d - a) + init);
+  double sigt((y + 0.5) * d * ((y + 0.5) * d - a) + init);
+  double sigs(sigt * mu0 / eps0);
+  return std::make_tuple(sig, sigs);
+};
+std::tuple<double, double> getCondPMLz(size_t z, size_t depth, double d) {
+  double init(1);
+  double final(100);
+  double a(depth * d - final / d / depth);
+  double sig(z * d * (z * d - a) + init);
+  double sigt((z + 0.5) * d * ((z + 0.5) * d - a) + init);
+
+  double sigs(sigt * mu0 / eps0);
+  return std::make_tuple(sig, sigs);
+};
+
+arma::cube getMatMat(size_t Nx, size_t Ny, size_t Nz, double d) {
+  // get Material map
+  arma::cube Rvec(Nx, Ny, Nz, arma::fill::zeros);
+  double sig(0);
+  double eps(0);
+  for (size_t ix = 0; ix < Nx; ix++) {
+    for (size_t iy = 0; iy < Ny; iy++) {
+      for (size_t iz = 0; iz < Nz; iz++) {
+        Rvec(ix, iy, iz) = getMat((ix - Nx * 0.5) * d, (iy - Ny * 0.5) * d,
+                                  (iz - Nz * 0.5) * d);
+      }
+    }
+  }
+  return Rvec;
+}
+
+std::tuple<double, double, double, double> getCond(size_t Nx, size_t Ny,
+                                                   size_t Nz, size_t PMLDepth,
+                                                   double d, size_t ix,
+                                                   size_t iy, size_t iz) {
+  // get electromagnetic properties based on lattice index, with PML layer
+
+  std::tuple<double, double, double, double> cond;
+
+  double sig(1);
+  double sigS(1);
+  double eps(eps0);
+  double mu(mu0);
+  if (inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
+      inFTDT(Nz, PMLDepth, iz)) {
+    // In FTDT:
+    auto condFTDT = getCondMaterial((ix - PMLDepth - Nx * 0.5) * d,
+                                    (iy - PMLDepth - Ny * 0.5) * d,
+                                    (iz - PMLDepth - Nz * 0.5) * d);
+    // Here the material is centered
+
+    sig = std::get<0>(condFTDT);
+    sigS = 0;
+    eps = std::get<1>(condFTDT);
+    mu = std::get<2>(condFTDT);
+
+  } else {
+    // In PML region
+    std::tuple<double, double> condPML;
+    if ((ix < PMLDepth)) {
+      condPML = getCondPMLx((PMLDepth - ix) * d, PMLDepth, d);
+
+    } else if (ix >= Nx - PMLDepth) {
+      condPML = (getCondPMLx((Nx - PMLDepth + ix) * d, PMLDepth, d));
+    }
+
+    if ((iy < PMLDepth)) {
+      condPML = (getCondPMLy((PMLDepth - iy) * d, PMLDepth, d));
+    } else if (iy >= Ny - PMLDepth) {
+      condPML = (getCondPMLy((Ny - PMLDepth + iy) * d, PMLDepth, d));
+    }
+
+    if ((iz < PMLDepth)) {
+      condPML = (getCondPMLz((PMLDepth - iz) * d, PMLDepth, d));
+    } else if (iz >= Nz - PMLDepth) {
+      condPML = (getCondPMLz((Nz - PMLDepth + iy) * d, PMLDepth, d));
+    }
+    sig = std::get<0>(condPML);
+    sigS = std::get<1>(condPML);
+  }
+  return std::make_tuple(sig, sigS, eps, mu);
+}
+
+arma::cube getR(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
+                double dt) {
+  arma::cube Rvec(Nx, Ny, Nz, arma::fill::zeros);
+  double sig(0);
+  double eps(0);
+  for (size_t ix = 0; ix < Nx; ix++) {
+    for (size_t iy = 0; iy < Ny; iy++) {
+      for (size_t iz = 0; iz < Nz; iz++) {
+        auto cond = getCond(Nx, Ny, Nz, PMLDepth, d, ix, iy, iz);
+        sig = std::get<0>(cond);
+        eps = std::get<2>(cond);
+
+        Rvec(ix, iy, iz) = exp(-sig * dt / eps);
+      }
+    }
+  }
+  return Rvec;
+}
+
+arma::cube getRs(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
+                 double dt) {
+  arma::cube Rvec(Nx, Ny, Nz, arma::fill::zeros);
+  double sigS(0);
+  double mu(0);
+  for (size_t ix = 0; ix < Nx; ix++) {
+    for (size_t iy = 0; iy < Ny; iy++) {
+      for (size_t iz = 0; iz < Nz; iz++) {
+        auto cond = getCond(Nx, Ny, Nz, PMLDepth, d, ix, iy, iz);
+        sigS = std::get<1>(cond);
+        mu = std::get<3>(cond);
+
+        Rvec(ix, iy, iz) = exp(-sigS * dt / mu);
+      }
+    }
+  }
+  return Rvec;
+}
+
+arma::cube getC(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
+                double dt) {
+  arma::cube C(Nx, Ny, Nz, arma::fill::zeros);
+  double sig(0);
+  double eps(0);
+  for (size_t ix = 0; ix < Nx; ix++) {
+    for (size_t iy = 0; iy < Ny; iy++) {
+      for (size_t iz = 0; iz < Nz; iz++) {
+        auto cond = getCond(Nx, Ny, Nz, PMLDepth, d, ix, iy, iz);
+        sig = std::get<0>(cond);
+        eps = std::get<2>(cond);
+        C(ix, iy, iz) = (1 - exp(-sig * dt / eps)) / (sig * d);
+      }
+    }
+  }
+  return C;
+}
+
+arma::cube getCs(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
+                 double dt) {
+  arma::cube C(Nx, Ny, Nz, arma::fill::zeros);
+  double sigS(0);
+  double mu(0);
+  for (size_t ix = 0; ix < Nx; ix++) {
+    for (size_t iy = 0; iy < Ny; iy++) {
+      for (size_t iz = 0; iz < Nz; iz++) {
+        auto cond = getCond(Nx, Ny, Nz, PMLDepth, d, ix, iy, iz);
+        sigS = std::get<1>(cond);
+        mu = std::get<3>(cond);
+
+        if (inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
+            inFTDT(Nz, PMLDepth, iz)) {
+          C(ix, iy, iz) = dt / (mu * d);
+        } else {
+          C(ix, iy, iz) = (1 - exp(-sigS * dt / mu)) / (sigS * d);
+        }
+      }
+    }
+  }
+  return C;
+}
+void outE(arma::field<arma::dcube> const &Ex,
+          arma::field<arma::dcube> const &Ey,
+          arma::field<arma::dcube> const &Ez, double dt) {
+  for (size_t i = 0; i < Ex.size(); i++) {
+    std::string dir("Data/" + std::to_string(i));
+
+    std::filesystem::create_directories(dir.c_str());
+    arma::cube Exi(Ex(i));
+    std::ofstream fileObservables(
+        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "E").c_str());
+    fileObservables.precision(15);
+    fileObservables
+        << R"(/*--------------------------------*- C++ -*----------------------------------*\)"
+           "\n"
+           R"(| =========                 |                                                 |)"
+           "\n"
+           R"(| \\      /  F ield         | foam-extend: Open Source CFD                    |)"
+           "\n"
+           R"(|  \\    /   O peration     | Version:     4.0                                |)"
+           "\n"
+           R"(|   \\  /    A nd           | Web:         http://www.foam-extend.org         |)"
+           "\n"
+           R"(|    \\/     M anipulation  |                                                 |)"
+           "\n"
+           R"(\*---------------------------------------------------------------------------*/)"
+           "\n"
+           R"(FoamFile)"
+           "\n"
+           R"({)"
+           "\n"
+           R"(    version 2.0;)"
+           "\n"
+           R"(    format ascii;)"
+           "\n"
+           R"(    class volVectorField;)"
+           "\n"
+           R"(    location ")"
+        << dir
+        << R"(";)"
+           "\n"
+           R"(    object      E;)"
+           "\n}\n"
+           R"(// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //)"
+           "\n\n"
+           R"(dimensions      [0 1 -1 0 0 0 0];)"
+           "\n\n"
+           R"(internalField   nonuniform List<vector>)"
+           "\n"
+        << Exi.n_elem << "\n(\n";
+
+    for (size_t ix = 0; ix < Exi.n_rows; ix++) {
+      for (size_t iy = 0; iy < Exi.n_cols; iy++) {
+        for (size_t iz = 0; iz < Exi.n_slices; iz++) {
+          fileObservables << "(" << Ex(i)(ix, iy, iz) << ","
+                          << Ey(i)(ix, iy, iz) << "," << Ez(i)(ix, iy, iz)
+                          << ")" << std::endl;
+        }
+      }
+    }
+    fileObservables
+        << ")\n;\n\n"
+           "boundaryField\n"
+           "{\n"
+           "    fuel\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (0.1 0 0);\n"
+           "    }\n"
+           "    air\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (-0.1 0 0);\n"
+           "    }\n"
+           "    outlet\n"
+           "    {\n"
+           "        type            zeroGradient;\n"
+           "    }\n"
+           "    frontAndBack\n"
+           "    {\n"
+           "        type            empty;\n"
+           "    }\n"
+           "}\n\n\n"
+           R"(// ************************************************************************* //)"
+           "\n ";
+
+    fileObservables.close();
+  }
+}
+
+void outH(arma::field<arma::dcube> const &Hx,
+          arma::field<arma::dcube> const &Hy,
+          arma::field<arma::dcube> const &Hz, double dt) {
+  for (size_t i = 0; i < Hx.size(); i++) {
+    std::string dir("Data/" + std::to_string(i));
+
+    std::filesystem::create_directories(dir.c_str());
+    arma::cube Hxi(Hx(i));
+    std::ofstream fileObservables(
+        ("/home/lucien/Documents/Em/EM/" + dir + "/" + "H").c_str());
+    fileObservables.precision(15);
+    fileObservables
+        << R"(/*--------------------------------*- C++ -*----------------------------------*\)"
+           "\n"
+           R"(| =========                 |                                                 |)"
+           "\n"
+           R"(| \\      /  F ield         | foam-extend: Open Source Cstd::filesystem::create_directory();FD                    |)"
+           "\n"
+           R"(|  \\    /   O peration     | Version:     4.0                                |)"
+           "\n"
+           R"(|   \\  /    A nd           | Web:         http://www.foam-extend.org         |)"
+           "\n"
+           R"(|    \\/     M anipulation  |                                                 |)"
+           "\n"
+           R"(\*---------------------------------------------------------------------------*/)"
+           "\n"
+           R"(FoamFile)"
+           "\n"
+           R"({)"
+           "\n"
+           R"(    version 2.0;)"
+           "\n"
+           R"(    format ascii;)"
+           "\n"
+           R"(    class volVectorField;)"
+           "\n"
+           R"(    location ")"
+        << dir
+        << R"(";)"
+           "\n"
+           R"(    object      H;)"
+           "\n}\n"
+           R"(// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //)"
+           "\n\n"
+           R"(dimensions      [0 1 -1 0 0 0 0];)"
+           "\n\n"
+           R"(internalField   nonuniform List<vector>)"
+           "\n"
+        << Hxi.n_elem << "\n(\n";
+
+    for (size_t ix = 0; ix < Hxi.n_rows; ix++) {
+      for (size_t iy = 0; iy < Hxi.n_cols; iy++) {
+        for (size_t iz = 0; iz < Hxi.n_slices; iz++) {
+          fileObservables << "(" << Hx(i)(ix, iy, iz) << ","
+                          << Hy(i)(ix, iy, iz) << "," << Hz(i)(ix, iy, iz)
+                          << ")" << std::endl;
+        }
+      }
+    }
+    fileObservables
+        << ")\n;\n\n"
+           "boundaryField\n"
+           "{\n"
+           "    fuel\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (0.1 0 0);\n"
+           "    }\n"
+           "    air\n"
+           "    {\n"
+           "        type            fixedValue;\n"
+           "        value           uniform (-0.1 0 0);\n"
+           "    }\n"
+           "    outlet\n"
+           "    {\n"
+           "        type            zeroGradient;\n"
+           "    }\n"
+           "    frontAndBack\n"
+           "    {\n"
+           "        type            empty;\n"
+           "    }\n"
+           "}\n\n\n"
+           R"(// ************************************************************************* //)"
+           "\n ";
+
+    fileObservables.close();
+  }
+}
+
+int main(int argc, char const *argv[]) {
+  std::cout << "Eps0: " << eps0 << "\n mu0: " << mu0 << std::endl;
+  double xLen = 0.3;
+  double yLen = 0.3;
+  double zLen = 0.3;
+  size_t NxInside = 10;
+  size_t NyInside = 10;
+  size_t NzInside = 10;
+  size_t PML_depth = 3;
+
+  size_t xN = NxInside + 2 * PML_depth;
+  size_t yN = NyInside + 2 * PML_depth;
+  size_t zN = NzInside + 2 * PML_depth;
+  size_t totalN = xN * yN * zN;
+
+  double dx = xLen / NxInside;
+  double dy = yLen / NyInside;
+  double dz = zLen / NzInside;
+
+  // Time parameters
+  double t = 0;
+  double stab_factor = 1;
+  double dt = dx / (c * sqrt(3) * stab_factor);
+  size_t num_timesteps = 500;
+  double t_final = dt * num_timesteps;
+
+  // std::cout << t_final;
+
+  arma::field<arma::dcube> Ex(num_timesteps);
+  arma::field<arma::dcube> Ey(num_timesteps);
+  arma::field<arma::dcube> Ez(num_timesteps);
+  arma::field<arma::dcube> Hx(num_timesteps);
+  arma::field<arma::dcube> Hy(num_timesteps);
+  arma::field<arma::dcube> Hz(num_timesteps);
+
+  arma::field<arma::dcube> Hxy(2);
+  arma::field<arma::dcube> Hyx(2);
+  arma::field<arma::dcube> Hzy(2);
+  arma::field<arma::dcube> Hxz(2);
+  arma::field<arma::dcube> Hyz(2);
+  arma::field<arma::dcube> Hzx(2);
+
+  arma::field<arma::dcube> Exy(2);
+  arma::field<arma::dcube> Eyx(2);
+  arma::field<arma::dcube> Ezy(2);
+  arma::field<arma::dcube> Exz(2);
+  arma::field<arma::dcube> Eyz(2);
+  arma::field<arma::dcube> Ezx(2);
+
+  Ex(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Ey(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Ez(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hx(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hy(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hz(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+  Hxy(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hyx(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hzy(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hxz(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hyz(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Hzx(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+  Exy(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Eyx(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Ezy(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Exz(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Eyz(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+  Ezx(0) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+  // double R = dt / (2 * eps0);
+  // double Rs = dt / mu0;
+  // double Ra = pow(c * dt / dx, 2);
+  // double Rb = dt / (mu0 * dx);
+  // double invRb = 1.0 / Rb;
+  // arma::cube Ca(xN, yN, zN, arma::fill::zeros);
+  // arma::cube Cb(xN, yN, zN, arma::fill::zeros);
+
+  // set integrating factors
+
+  arma::cube R = getR(xN, yN, zN, PML_depth, dx, dt);
+
+  arma::cube C = getC(xN, yN, zN, PML_depth, dx, dt);
+
+  arma::cube RS = getRs(xN, yN, zN, PML_depth, dx, dt);
+
+  arma::cube CS = getCs(xN, yN, zN, PML_depth, dx, dt);
+
+  // DEFINE incident wave :
+  double inc_frequency = c / (100 * dx);
+  double inc_omega = 2 * pi * inc_frequency;
+  double inc_amplitude = 1e5;
+  // units are teslas
+  double inc_harmonic = 1;
+
+  std::cout << inc_frequency << std::endl;
+  std::cout << dt << std::endl;
+
+  for (size_t it = 1; it < num_timesteps; it++) {
+    std::cout << inc_amplitude * sin(inc_omega * inc_harmonic * it * dt)
+              << std::endl;
+    Hx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ex(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ey(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ez(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+    Hxy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hyx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hzy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hxz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hyz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Hzx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+    Exy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Eyx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ezy(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Exz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Eyz(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+    Ezx(1) = arma::cube(xN, yN, zN, arma::fill::zeros);
+
+    for (size_t iz = 1; iz < zN - 1; iz++) {
+      for (size_t iy = 1; iy < yN - 1; iy++) {
+        for (size_t ix = 1; ix < xN - 1; ix++) {
+          double Hxyi = (RS(ix, iy, iz)) * Hxy(0)(ix, iy, iz) +
+                        CS(ix, iy, iz) *
+                            (Ezx(0)(ix, iy, iz) + Ezy(0)(ix, iy, iz) -
+                             Ezx(0)(ix, iy - 1, iz) - Ezy(0)(ix, iy - 1, iz));
+          Hxy(1)(ix, iy, iz) = Hxyi;
+          double Hzyi = (RS(ix, iy, iz)) * Hzy(0)(ix, iy, iz) -
+                        CS(ix, iy, iz) *
+                            (Exy(0)(ix, iy, iz) + Exz(0)(ix, iy, iz) -
+                             Exy(0)(ix, iy - 1, iz) - Exz(0)(ix, iy - 1, iz));
+          Hzy(1)(ix, iy, iz) = Hzyi;
+          double Hzxi = (RS(ix, iy, iz)) * Hzx(0)(ix, iy, iz) +
+                        CS(ix, iy, iz) *
+                            (Eyx(0)(ix, iy, iz) + Eyz(0)(ix, iy, iz) -
+                             Eyx(0)(ix, iy - 1, iz) - Eyz(0)(ix, iy - 1, iz));
+          Hzx(1)(ix, iy, iz) = Hzxi;
+          double Hyxi = (RS(ix, iy, iz)) * Hyx(0)(ix, iy, iz) -
+                        CS(ix, iy, iz) *
+                            (Ezx(0)(ix, iy, iz) + Ezy(0)(ix, iy, iz) -
+                             Ezx(0)(ix, iy - 1, iz) - Ezy(0)(ix, iy - 1, iz));
+          Hyx(1)(ix, iy, iz) = Hyxi;
+          double Hyzi = (RS(ix, iy, iz)) * Hyz(0)(ix, iy, iz) +
+                        CS(ix, iy, iz) *
+                            (Exz(0)(ix, iy, iz) + Exy(0)(ix, iy, iz) -
+                             Exz(0)(ix, iy - 1, iz) - Exy(0)(ix, iy - 1, iz));
+          Hyz(1)(ix, iy, iz) = Hyzi;
+          double Hxzi = (RS(ix, iy, iz)) * Hxz(0)(ix, iy, iz) -
+                        CS(ix, iy, iz) *
+                            (Eyz(0)(ix, iy, iz) + Eyx(0)(ix, iy, iz) -
+                             Eyz(0)(ix, iy - 1, iz) - Eyx(0)(ix, iy - 1, iz));
+          Hxz(1)(ix, iy, iz) = Hxzi;
+          double Exyi =
+              (R(ix, iy, iz)) * Exy(0)(ix, iy, iz) +
+              C(ix, iy, iz) * (Hzx(0)(ix, iy, iz) + Hzy(0)(ix, iy, iz) -
+                               Hzx(0)(ix, iy - 1, iz) - Hzy(0)(ix, iy - 1, iz));
+          if (ix == PML_depth + 1) {
+            Exyi += inc_amplitude * sin(inc_omega * inc_harmonic * it * dt);
+          }
+          Exy(1)(ix, iy, iz) = Exyi;
+          double Ezyi =
+              (R(ix, iy, iz)) * Ezy(0)(ix, iy, iz) -
+              C(ix, iy, iz) * (Hxy(0)(ix, iy, iz) + Hxz(0)(ix, iy, iz) -
+                               Hxy(0)(ix, iy - 1, iz) - Hxz(0)(ix, iy - 1, iz));
+          Ezy(1)(ix, iy, iz) = Ezyi;
+          double Ezxi =
+              (R(ix, iy, iz)) * Ezx(0)(ix, iy, iz) +
+              C(ix, iy, iz) * (Hyx(0)(ix, iy, iz) + Hyz(0)(ix, iy, iz) -
+                               Hyx(0)(ix, iy - 1, iz) - Hyz(0)(ix, iy - 1, iz));
+          Ezx(1)(ix, iy, iz) = Ezxi;
+          double Eyxi =
+              (R(ix, iy, iz)) * Eyx(0)(ix, iy, iz) -
+              C(ix, iy, iz) * (Hzx(0)(ix, iy, iz) + Hzy(0)(ix, iy, iz) -
+                               Hzx(0)(ix, iy - 1, iz) - Hzy(0)(ix, iy - 1, iz));
+          Eyx(1)(ix, iy, iz) = Eyxi;
+          double Eyzi =
+              (R(ix, iy, iz)) * Eyz(0)(ix, iy, iz) +
+              C(ix, iy, iz) * (Hxz(0)(ix, iy, iz) + Hxy(0)(ix, iy, iz) -
+                               Hxz(0)(ix, iy - 1, iz) - Hxy(0)(ix, iy - 1, iz));
+          Eyz(1)(ix, iy, iz) = Eyzi;
+          double Exzi =
+              (R(ix, iy, iz)) * Exz(0)(ix, iy, iz) -
+              C(ix, iy, iz) * (Hyz(0)(ix, iy, iz) + Hyx(0)(ix, iy, iz) -
+                               Hyz(0)(ix, iy - 1, iz) - Hyx(0)(ix, iy - 1, iz));
+          if (ix == PML_depth + 1) {
+            Exzi += inc_amplitude * sin(inc_omega * inc_harmonic * it * dt);
+          }
+
+          Exz(1)(ix, iy, iz) = Exzi;
+          Ex(it)(ix, iy, iz) = Exy(1)(ix, iy, iz) + Exz(1)(ix, iy, iz);
+          Ey(it)(ix, iy, iz) = Eyx(1)(ix, iy, iz) + Eyz(1)(ix, iy, iz);
+          Ez(it)(ix, iy, iz) = Ezy(1)(ix, iy, iz) + Ezx(1)(ix, iy, iz);
+          Hx(it)(ix, iy, iz) = Hxy(1)(ix, iy, iz) + Hxz(1)(ix, iy, iz);
+          Hy(it)(ix, iy, iz) = Hyx(1)(ix, iy, iz) + Hyz(1)(ix, iy, iz);
+          Hz(it)(ix, iy, iz) = Hzy(1)(ix, iy, iz) + Hzx(1)(ix, iy, iz);
+        }
+      }
+    }
+    Hxy(0) = Hxy(1);
+    Hyx(0) = Hyx(1);
+    Hzy(0) = Hzy(1);
+    Hxz(0) = Hxz(1);
+    Hyz(0) = Hyz(1);
+    Hzx(0) = Hzx(1);
+
+    Exy(0) = Exy(1);
+    Eyx(0) = Eyx(1);
+    Ezy(0) = Ezy(1);
+    Exz(0) = Exz(1);
+    Eyz(0) = Eyz(1);
+    Ezx(0) = Ezx(1);
+  }
+  return 0;
+}
