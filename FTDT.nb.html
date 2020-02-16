@@ -1751,44 +1751,40 @@ summary {
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShSY3BwKVxubGlicmFyeShSY3BwQXJtYWRpbGxvKVxuc291cmNlQ3BwKCdSY3BwVGVzdC5jcHAnKVxuYGBgIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShSY3BwKVxubGlicmFyeShSY3BwQXJtYWRpbGxvKVxuc291cmNlQ3BwKCdSY3BwVGVzdC5jcHAnKVxuXG5gYGAifQ== -->
 <pre class="r"><code>library(Rcpp)
 library(RcppArmadillo)
-sourceCpp('RcppTest.cpp')</code></pre>
-<!-- rnb-source-end -->
-<!-- rnb-chunk-end -->
-<!-- rnb-text-begin -->
-<!-- rnb-text-end -->
-<!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueCA9IEZURFQoNTAsNTAsNTApXG5cbmBgYCJ9 -->
-<pre class="r"><code>x = FTDT(50,50,50)
+sourceCpp('RcppTest.cpp')
 </code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShtaXNjM2QpXG52IDwteFtbMV1dWzQwMF1bWzFdXVxuY29udG91cjNkKHYsIDEsYWxwaGEgPSAwLjEpXG5gYGAifQ== -->
-<pre class="r"><code>library(misc3d)
-v &lt;-x[[1]][400][[1]]
-contour3d(v, 1,alpha = 0.1)</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuY2VsbHM9MzBcbnggPSBGVERUKGNlbGxzLGNlbGxzLGNlbGxzKVxuYGBgIn0= -->
+<pre class="r"><code>cells=30
+x = FTDT(cells,cells,cells)</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiRXBzMDogOC44NTRlLTEyXG4gbXUwOiAxLjI1NjY2ZS0wNlxuZjogMi45OTc5MmUrMDlcbmR0OiAxLjkyNTgzZS0xMVxuIn0= -->
+<pre><code>Eps0: 8.854e-12
+ mu0: 1.25666e-06
+f: 2.99792e+09
+dt: 1.92583e-11</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxueCA8LSBzZXEoLTIsMixsZW49NTApXG5nIDwtIGV4cGFuZC5ncmlkKHggPSB4LCB5ID0geCwgeiA9IHgpXG52IDwtIGFycmF5KGckeF40ICsgZyR5XjQgKyBnJHpeNCwgcmVwKGxlbmd0aCh4KSwzKSlcbmNvbiA8LSBjb21wdXRlQ29udG91cjNkKHYsIG1heCh2KSwgMSlcbmRyYXdTY2VuZShtYWtlVHJpYW5nbGVzKGNvbikpXG5gYGAifQ== -->
-<pre class="r"><code>x &lt;- seq(-2,2,len=50)
-g &lt;- expand.grid(x = x, y = x, z = x)
-v &lt;- array(g$x^4 + g$y^4 + g$z^4, rep(length(x),3))
-con &lt;- computeContour3d(v, max(v), 1)
-drawScene(makeTriangles(con))</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShtaXNjM2QpXG52IDwteFtbMl1dWzUwMF1bWzFdXVxuY29udG91cjNkKGFicyh2KSwgYygwLDAuMSwwLjIsMC4zKSxhbHBoYSA9IDAuMSlcbmBgYCJ9 -->
+<pre class="r"><code>library(misc3d)
+v &lt;-x[[2]][500][[1]]
+contour3d(abs(v), c(0,0.1,0.2,0.3),alpha = 0.1)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 
-<div id="rmd-source-code">LS0tCnRpdGxlOiAiRlREVCIKb3V0cHV0OiBodG1sX25vdGVib29rCi0tLQoKCgpgYGB7cn0KbGlicmFyeShSY3BwKQpsaWJyYXJ5KFJjcHBBcm1hZGlsbG8pCnNvdXJjZUNwcCgnUmNwcFRlc3QuY3BwJykKCmBgYAoKYGBge3J9CnggPSBGVERUKDUwLDUwLDUwKQoKYGBgCiAgCmBgYHtyfQpsaWJyYXJ5KG1pc2MzZCkKdiA8LXhbWzFdXVs0MDBdW1sxXV0KY29udG91cjNkKHYsIDEsYWxwaGEgPSAwLjEpCmBgYAogIApgYGB7cn0KeCA8LSBzZXEoLTIsMixsZW49NTApCmcgPC0gZXhwYW5kLmdyaWQoeCA9IHgsIHkgPSB4LCB6ID0geCkKdiA8LSBhcnJheShnJHheNCArIGckeV40ICsgZyR6XjQsIHJlcChsZW5ndGgoeCksMykpCmNvbiA8LSBjb21wdXRlQ29udG91cjNkKHYsIG1heCh2KSwgMSkKZHJhd1NjZW5lKG1ha2VUcmlhbmdsZXMoY29uKSkKYGBgCiAgCiAg</div>
+<div id="rmd-source-code">LS0tCnRpdGxlOiAiRlREVCIKb3V0cHV0OiBodG1sX25vdGVib29rCi0tLQoKCgpgYGB7cn0KbGlicmFyeShSY3BwKQpsaWJyYXJ5KFJjcHBBcm1hZGlsbG8pCnNvdXJjZUNwcCgnUmNwcFRlc3QuY3BwJykKCmBgYAoKYGBge3J9CmNlbGxzPTMwCnggPSBGVERUKGNlbGxzLGNlbGxzLGNlbGxzKQoKYGBgCiAgCmBgYHtyfQpsaWJyYXJ5KG1pc2MzZCkKdiA8LXhbWzJdXVs1MDBdW1sxXV0KY29udG91cjNkKGFicyh2KSwgYygwLDAuMSwwLjIsMC4zKSxhbHBoYSA9IDAuMSkKYGBgCiAg</div>
 
 
 

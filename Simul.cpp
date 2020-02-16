@@ -14,10 +14,13 @@ namespace {
 double eps0 = 8.854e-12;
 double c = 299792458;
 double pi = 3.14159265359;
-double mu0 = 1.0 / (pow(eps0 * c, 2));
+double mu0 = 1.0 / (eps0 * pow(c, 2));
 }  // namespace
 
 std::tuple<double, double, double> getMaterialProps(int matCode) {
+  // Takes as input a material code
+  // and returns mu, eps, sigma for that material locally
+
   double sigma(0);
   double eps_r(eps0);
   double eps(0);
@@ -87,6 +90,7 @@ int getMat(double x, double y, double z) {
   }
   return matCode;
 }
+
 std::tuple<double, double, double> getCondMaterial(double x, double y,
                                                    double z) {
   // get electromagnetic properties based on position
@@ -95,7 +99,6 @@ std::tuple<double, double, double> getCondMaterial(double x, double y,
 
 bool inFTDT(size_t N, size_t Depth, size_t i) {
   // True if in FDTD region in 1D
-
   return (i >= Depth) && (i < N - Depth);
 }
 
@@ -108,6 +111,9 @@ std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
   double sig(x * d * (x * d - a) + init);
   double sigt((x + 0.5) * d * ((x + 0.5) * d - a) + init);
   double sigs(sigt * mu0 / eps0);
+  if (sig == 0 || sigs == 0) {
+    std::cout << x << std::endl;
+  }
   return std::make_tuple(sig, sigs);
 };
 std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
@@ -117,6 +123,9 @@ std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
   double sig(y * d * (y * d - a) + init);
   double sigt((y + 0.5) * d * ((y + 0.5) * d - a) + init);
   double sigs(sigt * mu0 / eps0);
+  if (sig == 0 || sigs == 0) {
+    std::cout << y << std::endl;
+  }
   return std::make_tuple(sig, sigs);
 };
 std::tuple<double, double> getCondPMLz(size_t z, size_t depth, double d) {
@@ -127,6 +136,9 @@ std::tuple<double, double> getCondPMLz(size_t z, size_t depth, double d) {
   double sigt((z + 0.5) * d * ((z + 0.5) * d - a) + init);
 
   double sigs(sigt * mu0 / eps0);
+  if (sig == 0 || sigs == 0) {
+    std::cout << z << std::endl;
+  }
   return std::make_tuple(sig, sigs);
 };
 
@@ -167,9 +179,9 @@ std::tuple<double, double, double, double> getCond(size_t Nx, size_t Ny,
                                     (iz - PMLDepth - Nz * 0.5) * d);
     // Here the material is centered
 
-    sig = std::get<0>(condFTDT);
+    sig = std::get<1>(condFTDT);
     sigS = 0;
-    eps = std::get<1>(condFTDT);
+    eps = std::get<0>(condFTDT);
     mu = std::get<2>(condFTDT);
 
   } else {
@@ -258,11 +270,14 @@ arma::cube getC(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
         auto cond = getCond(Nx, Ny, Nz, PMLDepth, d, ix, iy, iz, dir);
         sig = std::get<0>(cond);
         eps = std::get<2>(cond);
-        if (inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
-            inFTDT(Nz, PMLDepth, iz)) {
+        if ((inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
+             inFTDT(Nz, PMLDepth, iz)) ||
+            sig == 0) {
           C(ix, iy, iz) = dt / (eps * d);
+
         } else {
           C(ix, iy, iz) = (1 - exp(-sig * dt / eps)) / (sig * d);
+          // std::cout << sig << dir << std::endl;
         }
       }
     }
@@ -282,8 +297,9 @@ arma::cube getCs(size_t Nx, size_t Ny, size_t Nz, size_t PMLDepth, double d,
         sigS = std::get<1>(cond);
         mu = std::get<3>(cond);
 
-        if (inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
-            inFTDT(Nz, PMLDepth, iz)) {
+        if ((inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
+             inFTDT(Nz, PMLDepth, iz)) ||
+            sigS == 0) {
           C(ix, iy, iz) = dt / (mu * d);
         } else {
           C(ix, iy, iz) = (1 - exp(-sigS * dt / mu)) / (sigS * d);
@@ -477,9 +493,9 @@ int main(int argc, char const *argv[]) {
   double xLen = 0.3;
   double yLen = 0.3;
   double zLen = 0.3;
-  size_t NxInside = 20;
-  size_t NyInside = 20;
-  size_t NzInside = 20;
+  size_t NxInside = 50;
+  size_t NyInside = 50;
+  size_t NzInside = 50;
   size_t PML_depth = 3;
 
   size_t xN = NxInside + 2 * PML_depth;
@@ -575,12 +591,12 @@ int main(int argc, char const *argv[]) {
   // units are teslas
   double inc_harmonic = 1;
 
-  std::cout << inc_frequency << std::endl;
-  std::cout << dt << std::endl;
+  std::cout << "f: " << inc_frequency << std::endl;
+  std::cout << "dt: " << dt << std::endl;
 
   for (size_t it = 1; it < num_timesteps; it++) {
-    std::cout << inc_amplitude * sin(inc_omega * inc_harmonic * it * dt)
-              << std::endl;
+    // std::cout << inc_amplitude * sin(inc_omega * inc_harmonic * it * dt)
+    //          << std::endl;
     Hx(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
     Hy(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
     Hz(it) = arma::cube(xN, yN, zN, arma::fill::zeros);
@@ -621,25 +637,25 @@ int main(int argc, char const *argv[]) {
               (RSx(ix, iy, iz)) * Hzx(0)(ix, iy, iz) +
               CSx(ix, iy, iz) *
                   (Eyx(0)(ix, iy, iz) + Eyz(0)(ix, iy, iz) -
-                   Eyx(0)(ix, iy - 1, iz) - Eyz(0)(ix, iy - 1, iz));
+                   Eyx(0)(ix - 1, iy, iz) - Eyz(0)(ix - 1, iy, iz));
 
           Hyx(1)(ix, iy, iz) =
               (RSx(ix, iy, iz)) * Hyx(0)(ix, iy, iz) -
               CSx(ix, iy, iz) *
                   (Ezx(0)(ix, iy, iz) + Ezy(0)(ix, iy, iz) -
-                   Ezx(0)(ix, iy - 1, iz) - Ezy(0)(ix, iy - 1, iz));
+                   Ezx(0)(ix - 1, iy, iz) - Ezy(0)(ix - 1, iy, iz));
 
           Hyz(1)(ix, iy, iz) =
               (RSz(ix, iy, iz)) * Hyz(0)(ix, iy, iz) +
               CSz(ix, iy, iz) *
                   (Exz(0)(ix, iy, iz) + Exy(0)(ix, iy, iz) -
-                   Exz(0)(ix, iy - 1, iz) - Exy(0)(ix, iy - 1, iz));
+                   Exz(0)(ix, iy, iz - 1) - Exy(0)(ix, iy, iz - 1));
 
           Hxz(1)(ix, iy, iz) =
               (RSz(ix, iy, iz)) * Hxz(0)(ix, iy, iz) -
               CSz(ix, iy, iz) *
                   (Eyz(0)(ix, iy, iz) + Eyx(0)(ix, iy, iz) -
-                   Eyz(0)(ix, iy - 1, iz) - Eyx(0)(ix, iy - 1, iz));
+                   Eyz(0)(ix, iy, iz - 1) - Eyx(0)(ix, iy, iz - 1));
 
           Exy(1)(ix, iy, iz) =
               (Ry(ix, iy, iz)) * Exy(0)(ix, iy, iz) +
@@ -657,33 +673,33 @@ int main(int argc, char const *argv[]) {
               (Rx(ix, iy, iz)) * Ezx(0)(ix, iy, iz) +
               Cx(ix, iy, iz) *
                   (Hyx(0)(ix, iy, iz) + Hyz(0)(ix, iy, iz) -
-                   Hyx(0)(ix, iy - 1, iz) - Hyz(0)(ix, iy - 1, iz));
+                   Hyx(0)(ix - 1, iy, iz) - Hyz(0)(ix - 1, iy, iz));
 
           Eyx(1)(ix, iy, iz) =
               (Rx(ix, iy, iz)) * Eyx(0)(ix, iy, iz) -
               Cx(ix, iy, iz) *
                   (Hzx(0)(ix, iy, iz) + Hzy(0)(ix, iy, iz) -
-                   Hzx(0)(ix, iy - 1, iz) - Hzy(0)(ix, iy - 1, iz));
+                   Hzx(0)(ix - 1, iy, iz) - Hzy(0)(ix - 1, iy, iz));
 
           Eyz(1)(ix, iy, iz) =
               (Rz(ix, iy, iz)) * Eyz(0)(ix, iy, iz) +
               Cz(ix, iy, iz) *
                   (Hxz(0)(ix, iy, iz) + Hxy(0)(ix, iy, iz) -
-                   Hxz(0)(ix, iy - 1, iz) - Hxy(0)(ix, iy - 1, iz));
+                   Hxz(0)(ix, iy, iz - 1) - Hxy(0)(ix, iy, iz - 1));
 
           Exz(1)(ix, iy, iz) =
               (Rz(ix, iy, iz)) * Exz(0)(ix, iy, iz) -
               Cz(ix, iy, iz) *
                   (Hyz(0)(ix, iy, iz) + Hyx(0)(ix, iy, iz) -
-                   Hyz(0)(ix, iy - 1, iz) - Hyx(0)(ix, iy - 1, iz));
+                   Hyz(0)(ix, iy, iz - 1) - Hyx(0)(ix, iy, iz - 1));
 
-          Ex(it)(ix, iy, iz) = Exy(1)(ix, iy, iz) + Exz(1)(ix, iy, iz);
           if (ix == PML_depth + 1) {
-            Exz(1)(ix, iy, iz) +=
+            Ezx(1)(ix, iy, iz) +=
                 inc_amplitude * sin(inc_omega * inc_harmonic * it * dt);
-            Exy(1)(ix, iy, iz) +=
+            Ezy(1)(ix, iy, iz) +=
                 inc_amplitude * sin(inc_omega * inc_harmonic * it * dt);
           }
+          Ex(it)(ix, iy, iz) = Exy(1)(ix, iy, iz) + Exz(1)(ix, iy, iz);
           Ey(it)(ix, iy, iz) = Eyx(1)(ix, iy, iz) + Eyz(1)(ix, iy, iz);
           Ez(it)(ix, iy, iz) = Ezy(1)(ix, iy, iz) + Ezx(1)(ix, iy, iz);
           Hx(it)(ix, iy, iz) = Hxy(1)(ix, iy, iz) + Hxz(1)(ix, iy, iz);
