@@ -109,7 +109,7 @@ bool inFTDT(size_t N, size_t Depth, size_t i) {
 
 std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
   double init(0.001);
-  double final(100);
+  double final(1e8);
   double a(depth * d - final / d / depth);
   double sig(x * d * (x * d - a) + init);
   double sigt((x + 0.5) * d * ((x + 0.5) * d - a) + init);
@@ -121,7 +121,7 @@ std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
 };
 std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
   double init(0.001);
-  double final(100);
+  double final(1e8);
   double a(depth * d - final / d / depth);
   double sig(y * d * (y * d - a) + init);
   double sigt((y + 0.5) * d * ((y + 0.5) * d - a) + init);
@@ -133,7 +133,7 @@ std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
 };
 std::tuple<double, double> getCondPMLz(size_t z, size_t depth, double d) {
   double init(0.001);
-  double final(100);
+  double final(1e8);
   double a(depth * d - final / d / depth);
   double sig(z * d * (z * d - a) + init);
   double sigt((z + 0.5) * d * ((z + 0.5) * d - a) + init);
@@ -348,7 +348,7 @@ List FTDT(size_t NxIn, size_t NyIn, size_t NzIn) {
   size_t NxInside = NxIn;
   size_t NyInside = NxIn;
   size_t NzInside = NxIn;
-  size_t PML_depth = 3;
+  size_t PML_depth = 5;
 
   size_t xN = NxInside + 2 * PML_depth;
   size_t yN = NyInside + 2 * PML_depth;

@@ -340,7 +340,7 @@ void outE(arma::field<arma::dcube> const &Ex,
           arma::field<arma::dcube> const &Ey,
           arma::field<arma::dcube> const &Ez, double dt) {
   for (size_t i = 0; i < Ex.size(); i++) {
-    std::string dir("Data/" + std::to_string(i * dt));
+    std::string dir("Data/" + std::to_string(i));
 
     std::filesystem::create_directories(dir.c_str());
     arma::cube Exi(Ex(i));
@@ -373,7 +373,7 @@ void outE(arma::field<arma::dcube> const &Ex,
            R"(    class volVectorField;)"
            "\n"
            R"(    location ")"
-        << i * dt
+        << i
         << R"(";)"
            "\n"
            R"(    object      E;)"
@@ -429,7 +429,7 @@ void outH(arma::field<arma::dcube> const &Hx,
           arma::field<arma::dcube> const &Hy,
           arma::field<arma::dcube> const &Hz, double dt) {
   for (size_t i = 0; i < Hx.size(); i++) {
-    std::string dir("Data/" + std::to_string(i * dt));
+    std::string dir("Data/" + std::to_string(i));
 
     std::filesystem::create_directories(dir.c_str());
     arma::cube Hxi(Hx(i));
@@ -462,7 +462,7 @@ void outH(arma::field<arma::dcube> const &Hx,
            R"(    class volVectorField;)"
            "\n"
            R"(    location ")"
-        << i * dt
+        << i
         << R"(";)"
            "\n"
            R"(    object      H;)"
