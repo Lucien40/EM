@@ -108,7 +108,7 @@ bool inFTDT(size_t N, size_t Depth, size_t i) {
 // PML layer coefficients, quadratically graded
 
 std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
-  double init(1);
+  double init(0.001);
   double final(100);
   double a(depth * d - final / d / depth);
   double sig(x * d * (x * d - a) + init);
@@ -120,7 +120,7 @@ std::tuple<double, double> getCondPMLx(size_t x, size_t depth, double d) {
   return std::make_tuple(sig, sigs);
 };
 std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
-  double init(1);
+  double init(0.001);
   double final(100);
   double a(depth * d - final / d / depth);
   double sig(y * d * (y * d - a) + init);
@@ -132,7 +132,7 @@ std::tuple<double, double> getCondPMLy(size_t y, size_t depth, double d) {
   return std::make_tuple(sig, sigs);
 };
 std::tuple<double, double> getCondPMLz(size_t z, size_t depth, double d) {
-  double init(1);
+  double init(0.001);
   double final(100);
   double a(depth * d - final / d / depth);
   double sig(z * d * (z * d - a) + init);
@@ -177,15 +177,41 @@ std::tuple<double, double, double, double> getCond(size_t Nx, size_t Ny,
   if (inFTDT(Nx, PMLDepth, ix) && inFTDT(Ny, PMLDepth, iy) &&
       inFTDT(Nz, PMLDepth, iz)) {
     // In FTDT:
-    auto condFTDT = getCondMaterial((ix - PMLDepth - Nx * 0.5) * d,
-                                    (iy - PMLDepth - Ny * 0.5) * d,
-                                    (iz - PMLDepth - Nz * 0.5) * d);
+    std::tuple<double, double, double> condFTDT;
+    switch (dir) {
+      case 'x':
+        mu = std::get<2>(getCondMaterial((ix - PMLDepth - Nx * 0.5) * d,
+                                         (iy + 0.5 - PMLDepth - Ny * 0.5) * d,
+                                         (iz + 0.5 - PMLDepth - Nz * 0.5) * d));
+        condFTDT = getCondMaterial((ix + 0.5 - PMLDepth - Nx * 0.5) * d,
+                                   (iy - PMLDepth - Ny * 0.5) * d,
+                                   (iz - PMLDepth - Nz * 0.5) * d);
+        break;
+      case 'y':
+        mu = std::get<2>(getCondMaterial((ix + 0.5 - PMLDepth - Nx * 0.5) * d,
+                                         (iy - PMLDepth - Ny * 0.5) * d,
+                                         (iz + 0.5 - PMLDepth - Nz * 0.5) * d));
+        condFTDT = getCondMaterial((ix - PMLDepth - Nx * 0.5) * d,
+                                   (iy + 0.5 - PMLDepth - Ny * 0.5) * d,
+                                   (iz - PMLDepth - Nz * 0.5) * d);
+        break;
+      case 'z':
+        mu = std::get<2>(getCondMaterial((ix + 0.5 - PMLDepth - Nx * 0.5) * d,
+                                         (iy + 0.5 - PMLDepth - Ny * 0.5) * d,
+                                         (iz - PMLDepth - Nz * 0.5) * d));
+        condFTDT = getCondMaterial((ix - PMLDepth - Nx * 0.5) * d,
+                                   (iy - PMLDepth - Ny * 0.5) * d,
+                                   (iz + 0.5 - PMLDepth - Nz * 0.5) * d);
+        break;
+
+      default:
+        break;
+    }
     // Here the material is centered
 
     sig = std::get<1>(condFTDT);
     sigS = 0;
     eps = std::get<0>(condFTDT);
-    mu = std::get<2>(condFTDT);
 
   } else {
     // In PML region
@@ -335,7 +361,7 @@ List FTDT(size_t NxIn, size_t NyIn, size_t NzIn) {
 
   // Time parameters
   double t = 0;
-  double stab_factor = 1;
+  double stab_factor = 2;
   double dt = dx / (c * sqrt(3) * stab_factor);
   size_t num_timesteps = 500;
   double t_final = dt * num_timesteps;
